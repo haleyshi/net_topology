@@ -55,22 +55,6 @@ def getPhysIfaces():
         print cmd, status, output
         return None
 
-
-def isPhysIface(iface):
-    '''
-    Whether this is an physical interface
-    :param iface: string, interface name
-    :return: boolean, True or False
-    '''
-
-    phys = getPhysIfaces()
-    if phys is None:
-        return False
-    elif not phys:
-        return False
-    else:
-        return iface in phys
-
 def getNameSpaces():
     '''
     Get all NameSpaces on current host
@@ -110,44 +94,12 @@ def execInAllNamespaces(cmd):
     return result
 
 
-
-def isLoopBack(iface):
-    '''
-    Check whether the iface is lo one
-    :param iface: string, interface name
-    :return: boolean, True or False
-    '''
-
-    return iface == 'lo'
-
-
-def isOvsSystem(iface):
-    '''
-    Check whether the iface is ovs-system one
-    :param iface: string, interface name
-    :return: boolean, True or False
-    '''
-
-    return iface == 'ovs-system'
-
-
 def getAllIfaces():
     '''
     Get all interfaces
     :return: list, list of interfaces
     '''
     #TODO
-
-def getTunnels():
-    '''
-    Get the tunnels for all namespaces
-    :return: list, list of Tunnel
-    '''
-
-    #TODO
-    cmd = 'ip l2tp show tunnel'
-
-    regc = re.compile('(?s)Tunnel (\d+).*?From (\S+).*?to (\S+)\s+Peer tunnel (\d+).*?ports: (\d+)/(\d+)')
 
 
 def getLinuxBridges():
@@ -177,7 +129,7 @@ def getLinuxBridges():
                 if len(fields) >= 4:
                     nics = fields[3]
 
-                bridges.append(LinuxBridge(name, id, stp, nics, None))
+                bridges.append(LinuxBridge(name, id, stp, nics))
 
         return bridges
     else:
@@ -195,16 +147,16 @@ def getLinuxBridgesInAllNS():
 
     bridges = []
 
-    br_outputs = execInAllNamespaces(cmd)
+    all_ns_outputs = execInAllNamespaces(cmd)
 
-    if not br_outputs:
+    if not all_ns_outputs:
         return bridges
 
-    namespaces = br_outputs.keys()
+    namespaces = all_ns_outputs.keys()
 
     for namespace in namespaces:
-        br_output = br_outputs[namespace]
-        tuples = br_output.split('\n')
+        one_ns_output = all_ns_outputs[namespace]
+        tuples = one_ns_output.split('\n')
         del tuples[0]
 
         for tuple in tuples:
@@ -221,7 +173,6 @@ def getLinuxBridgesInAllNS():
                 bridges.append(LinuxBridge(name, id, stp, nics, namespace))
 
     return bridges
-
 
 
 def getOVSBridges():
@@ -254,35 +205,35 @@ def getOVSBridges():
                 port_name = fields[1].replace('"', '')
                 port = OVSPort(port_name, [], {})
                 if bridge is not None:
-                    bridge.addPort(port)
+                    bridge.addport(port)
 
             elif line.startswith("            Interface"):
                 fields = line.strip().split(' ')
                 interface_name = fields[1].replace('"', '')
                 interface = OVSInterface(interface_name, {})
                 if port is not None:
-                    port.addInterface(interface)
+                    port.addinterface(interface)
 
             elif line.startswith("                "):
                 fields = line.strip().split(' ')
                 key = fields[0].replace(':', '')
                 value = fields[1].replace('"', '')
                 if interface is not None:
-                    interface.updateOption(key, value)
+                    interface.updateoption(key, value)
 
             elif line.startswith("            "):
                 fields = line.strip().split(' ')
                 key = fields[0].replace(':', '')
                 value = fields[1].replace('"', '')
                 if port is not None:
-                    port.updateOption(key, value)
+                    port.updateoption(key, value)
 
             elif line.startswith("        "):
                 fields = line.strip().split(' ')
                 key = fields[0].replace(':', '')
                 value = fields[1].replace('"', '')
                 if bridge is not None:
-                    bridge.updateOption(key, value)
+                    bridge.updateoption(key, value)
 
         return bridges
     else:
@@ -319,5 +270,470 @@ def getRoutes():
     else:
         print cmd, status, output
         return None
+
+
+def getTunnels():
+    '''
+    Get the tunnels for this host
+    :return: list, list of Tunnel
+    '''
+
+    cmd = 'ip l2tp show tunnel'
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        regc = re.compile(r'(?s)Tunnel (\d+).*?From (\S+).*?to (\S+)\s+Peer tunnel (\d+).*?ports: (\d+)/(\d+)')
+        tunnels = []
+        regex_outputs = regc.findall(output)
+
+        for regex_output in regex_outputs:
+            tunnels.append(Tunnel(regex_output[0], regex_output[1], regex_output[2],
+                                  regex_output[3], regex_output[4], regex_output[5]))
+
+        return tunnels
+    else:
+        print cmd, status, output
+        return None
+
+
+def getTunnelsInAllNS():
+    '''
+    Get the tunnels for all namespaces
+    :return: list, list of Tunnel
+    '''
+
+    cmd = 'ip l2tp show tunnel'
+
+    regc = re.compile(r'(?s)Tunnel (\d+).*?From (\S+).*?to (\S+)\s+Peer tunnel (\d+).*?ports: (\d+)/(\d+)')
+
+    tunnels = []
+
+    all_ns_outputs = execInAllNamespaces(cmd)
+
+    if not all_ns_outputs:
+        return tunnels
+
+    namespaces = all_ns_outputs.keys()
+
+    for namespace in namespaces:
+        one_ns_output = all_ns_outputs[namespace]
+
+        regex_outputs = regc.findall(one_ns_output)
+
+        for regex_output in regex_outputs:
+            tunnels.append(Tunnel(regex_output[0], regex_output[1], regex_output[2],
+                                  regex_output[3], regex_output[4], regex_output[5],
+                                  namespace))
+
+    return tunnels
+
+
+def getSessions():
+    '''
+    Get the sessions for this host
+    :return: list, list of Session
+    '''
+
+    cmd = 'ip l2tp show session'
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        regc = re.compile(r'(?s)Session (\d+) in tunnel (\d+)\s+Peer session (\d+), tunnel (\d+)\s+interface name: (\S+)')
+        sessions = []
+        regex_outputs = regc.findall(output)
+
+        for regex_output in regex_outputs:
+            sessions.append(Session(regex_output[0], regex_output[1], regex_output[2],
+                                  regex_output[3], regex_output[4]))
+
+        return sessions
+    else:
+        print cmd, status, output
+        return None
+
+
+def getSessionsInAllNS():
+    '''
+    Get the sessions for all namespaces
+    :return: list, list of Session
+    '''
+
+    cmd = 'ip l2tp show session'
+
+    regc = re.compile(r'(?s)Session (\d+) in tunnel (\d+)\s+Peer session (\d+), tunnel (\d+)\s+interface name: (\S+)')
+
+    sessions = []
+
+    all_ns_outputs = execInAllNamespaces(cmd)
+
+    if not all_ns_outputs:
+        return sessions
+
+    namespaces = all_ns_outputs.keys()
+
+    for namespace in namespaces:
+        one_ns_output = all_ns_outputs[namespace]
+
+        regex_outputs = regc.findall(one_ns_output)
+
+        for regex_output in regex_outputs:
+            sessions.append(Session(regex_output[0], regex_output[1], regex_output[2],
+                                   regex_output[3], regex_output[4], namespace))
+
+    return sessions
+
+
+def getIpAddrIfaces():
+    '''
+    Get the interfaces list from 'ip address show' cmd
+    :return: list, list of IpAddressInterface
+    '''
+
+    cmd = 'ip address show'
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        ifaces = []
+
+        lines = output.split('\n')
+        iface = None
+
+        for line in lines:
+            if line.startswith(' '):
+                line = line.strip()
+                if line.startswith("link/"):
+                    regex_result = re.search(r'link/\S+ (\S+)', line)
+
+                    if regex_result:
+                        if iface is not None:
+                            iface.setmac(regex_result.group(1))
+                elif line.startswith("inet "):
+                    regex_result = re.search(r'inet (\S+)', line)
+
+                    if regex_result:
+                        if iface is not None:
+                            iface.setip(regex_result.group(1))
+            else:
+                regex_result = re.search(r'(\d+): (\S+): \S+ mtu (\d+).*?state (\S+)', line)
+
+                if regex_result:
+                    iface = IpAddressInterface(regex_result.group(2), regex_result.group(1),
+                                               regex_result.group(3), regex_result.group(4))
+                    ifaces.append(iface)
+
+        return ifaces
+    else:
+        print cmd, status, output
+        return None
+
+
+def getIpAddrIfacesInAllNS():
+    '''
+    Get the interfaces list from 'ip address show' cmd in all namepsaces
+    :return: list, list of IpAddressInterface
+    '''
+
+    cmd = 'ip address show'
+
+    ifaces = []
+
+    all_ns_outputs = execInAllNamespaces(cmd)
+
+    if not all_ns_outputs:
+        return ifaces
+
+    namespaces = all_ns_outputs.keys()
+
+    for namespace in namespaces:
+        one_ns_output = all_ns_outputs[namespace]
+
+        lines = one_ns_output.split('\n')
+        iface = None
+
+        for line in lines:
+            if line.startswith(' '):
+                line = line.strip()
+                if line.startswith("link/"):
+                    regex_result = re.search(r'link/\S+ (\S+)', line)
+
+                    if regex_result:
+                        if iface is not None:
+                            iface.setmac(regex_result.group(1))
+                elif line.startswith("inet "):
+                    regex_result = re.search(r'inet (\S+)', line)
+
+                    if regex_result:
+                        if iface is not None:
+                            iface.setip(regex_result.group(1))
+            else:
+                regex_result = re.search(r'(\d+): (\S+): \S+ mtu (\d+).*?state (\S+)', line)
+
+                if regex_result:
+                    iface = IpAddressInterface(regex_result.group(2), regex_result.group(1),
+                                               regex_result.group(3), regex_result.group(4), namespace=namespace)
+                    ifaces.append(iface)
+
+
+def getVethPeerIndex(ifaceName, namespace=None):
+    '''
+    Get the Veth Peer Index for given interface
+    :param ifaceName: string, name of interface
+    :return: int, the index for the peer interface
+    '''
+
+    cmd = "ethtool -S %s | awk '/peer_ifindex/ {print $2}'" % ifaceName
+
+    if namespace is not None:
+        cmd = "ip netns exec " + namespace + " " + cmd
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        #print cmd, status, output
+        return output
+    else:
+        print cmd, status, output
+        return None
+
+
+def getOVSOptions(ifaceName, ovsBridges):
+    for bridge in ovsBridges:
+        for port in bridge.ports:
+            if ifaceName == port.name:
+                for interface in port.interfaces:
+                    if ifaceName == interface.name:
+                        options = {}
+
+                        for key in port.options.keys():
+                            options[key] = port.options[key]
+
+                        for key in interface.options.keys():
+                            options[key] = interface.options[key]
+
+                        return options
+
+    return None
+
+
+def isPhysIface(ifaceName):
+    '''
+    Whether this is an physical interface
+    :param iface: string, interface name
+    :return: boolean, True or False
+    '''
+
+    phys = getPhysIfaces()
+    if phys is None:
+        return False
+    elif not phys:
+        return False
+    else:
+        return ifaceName in phys
+
+def isLoopBack(ifaceName):
+    '''
+    Check whether the iface is lo one
+    :param iface: string, interface name
+    :return: boolean, True or False
+    '''
+
+    return ifaceName == 'lo'
+
+
+def isOvsSystem(ifaceName):
+    '''
+    Check whether the iface is ovs-system one
+    :param iface: string, interface name
+    :return: boolean, True or False
+    '''
+
+    return ifaceName == 'ovs-system'
+
+
+def isLinuxBrIface(ifaceName, namespace=None):
+    '''
+    Check whether the given interface is a Linux Bridge Interface
+    :param ifaceName: string, name of interface
+    :return: boolean, True or False
+    '''
+
+    cmd = 'ls /sys/devices/virtual/net/%s/bridge' %ifaceName
+    if namespace is not None:
+        cmd = "ip netns exec " + namespace + " " + cmd
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        return True
+    else:
+        #print cmd, status, output
+        return False
+
+
+def isTunTap(ifaceName, namespace=None):
+    '''
+    Check whether the given interface is a Tunnel Tap
+    :param ifaceName: string, name of interface
+    :return: boolean, True or False
+    '''
+
+    cmd = 'ls /sys/class/net/%s/tun_flags' %ifaceName
+    if namespace is not None:
+        cmd = "ip netns exec " + namespace + " " + cmd
+
+    status, output = commands.getstatusoutput(cmd)
+
+    if status == 0:
+        return True
+    else:
+        #print cmd, status, output
+        return False
+
+
+def isVlanAlias(ifaceName):
+    '''
+    Check whether this name is a vlan alias
+    :param ifaceName: string, name of interface
+    :return: boolean, True or False
+    '''
+
+    return ifaceName.find('@') != -1
+
+
+def getSession(ifaceName, sessions):
+    '''
+    Get the session for the given interface
+    :param ifaceName: string, name of interface
+    :param sessions: list, list of Session
+    :return: Session
+    '''
+
+    for session in sessions:
+        if session.iface == ifaceName:
+            return session
+
+    return None
+
+
+def getTunnel(tunId, tunnels):
+    '''
+    Get the Tunnel from the given tunId
+    :param tunId: int, tunnel Id
+    :param tunnels: list, list of Tunnel
+    :return: Tunnel
+    '''
+
+    for tunnel in tunnels:
+        if tunnel.tunId == tunId:
+            return tunnel
+
+    return None
+
+
+def findOutIface(ip):
+    '''
+    Find the interface used to send out the packet according to the given IP
+    :param ip: string, ip
+    :return: string, interface name
+    '''
+
+    routes = getRoutes()
+    if routes is not None:
+        for route in routes:
+            if route.src == ip:
+                return route.device
+
+    return None
+
+
+def getAllInterfaces(allNs):
+    '''
+    Return all the interfaces on given host
+    :param allNs: boolean, True or False, whether to exec in all NameSpaces
+    :return: list, list of Interface
+    '''
+
+    ipAddrIfaces = []
+    ovsBridges = getOVSBridges()
+    physIfaces = getPhysIfaces()
+    sessions = []
+    tunnels = []
+
+    if allNs:
+        ipAddrIfaces = getIpAddrIfacesInAllNS()
+        sessions = getSessionsInAllNS()
+        tunnels = getTunnelsInAllNS()
+    else:
+        ipAddrIfaces = getIpAddrIfaces()
+        sessions = getSessions()
+        tunnels = getTunnels()
+
+    ifaces = []
+
+    for ipAddrIface in ipAddrIfaces:
+        name = ipAddrIface.name
+        iface = Interface(name, ipAddrIface.index, None, ipAddrIface.mtu, ipAddrIface.state,
+                          ipAddrIface.mac, ipAddrIface.ip, ipAddrIface.namespace, options={})
+
+        ifaces.append(iface)
+
+        if isOvsSystem(name):
+            iface.settype('ovs-system')
+
+        peer = getVethPeerIndex(name, ipAddrIface.namespace)
+        if peer is not None:
+            if peer != "no stats available":
+                iface.settype('veth-pair')
+                iface.updateoption('peerIf', peer)
+
+        if isLinuxBrIface(name):
+            iface.settype('LinuxBridgeInterface')
+
+        options = getOVSOptions(name, ovsBridges)
+        if options is not None:
+            if options.has_key('type'):
+                if options['type'] == 'internal':
+                    iface.settype('OVSInternal')
+                elif options['type'] == 'gre':
+                    iface.settype('gre')
+                elif options['type'] == 'vxlan':
+                    iface.settype('vxlan')
+
+            for key in options.keys():
+                #print name, key, options[key]
+                iface.updateoption(key, options[key])
+
+        if isPhysIface(name):
+            iface.settype('physical')
+
+        if isLoopBack(name):
+            iface.settype('loopback')
+
+        if isTunTap(name):
+            iface.settype('tuntap')
+
+        session = getSession(name, sessions)
+        if session is not None:
+            iface.settype('l2tp')
+            tunnel = getTunnel(session.tunId, tunnels)
+
+            if tunnel is not None:
+                ifaceUsed = findOutIface(tunnel.fromIp)
+
+                if ifaceUsed is not None:
+                    iface.updateoption('ifaceUsed', ifaceUsed)
+
+        if isVlanAlias(name):
+            regex_result = re.search(r'(\S+)\.(\d+)@(\S+)', name)
+            if regex_result:
+                if regex_result.group(1) == regex_result.group(3):
+                    iface.settype('vlan_alias')
+                    iface.updateoption('vlantag', regex_result.group(2))
+                    iface.updateoption('ifaceUsed', regex_result.group(1))
+
+    return ifaces
 
 

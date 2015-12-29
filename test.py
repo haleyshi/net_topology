@@ -47,3 +47,27 @@ bridges = getOVSBridges()
 for bridge in bridges:
     print bridge
 print
+
+print "getIpAddrIfaces()"
+ifaces = getIpAddrIfaces()
+for iface in ifaces:
+    print iface
+print
+
+print "getIpAddrIfacesInAllNS()"
+ifaces = getIpAddrIfacesInAllNS()
+for iface in ifaces:
+    print iface
+print
+
+print "getAllInterfaces(True)"
+ifaces = getAllInterfaces(True)
+for iface in ifaces:
+    print iface
+print
+
+print "getAllInterfaces(False)"
+ifaces = getAllInterfaces(False)
+for iface in ifaces:
+    print iface
+print

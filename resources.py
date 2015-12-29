@@ -5,27 +5,56 @@ class NetworkElement():
         self.name = name
 
 
-class Iface(NetworkElement):
-    def __init__(self, name, type, state, mac, addrs, mtu, vlanTag, used, peer, namespace, idx, flags):
+class Interface(NetworkElement):
+    def __init__(self, name, index, type, mtu, state, mac, ip, namespace, options={}):
         NetworkElement.__init__(self, name)
+        self.index = index
         self.type = type
+        self.mtu = mtu
         self.state = state
         self.mac = mac
-        self.addrs = addrs
-        self.mtu = mtu
-        self.vlanTag =vlanTag
-        self.used = used
-        self.peer = peer
+        self.ip = ip
         self.namespace = namespace
-        self.idx = idx
-        self.flags = flags
+        self.options = options
+
+    def settype(self, type):
+        self.type = type
+
+    def updateoption(self, key, value):
+        self.options[key] = value
+
+    def __str__(self):
+        return "Interface(name: %s, index: %s, type: %s, mtu: %s, state: %s, mac: %s, ip: %s, namespace: %s, options: %s)" \
+               % (self.name, self.index, self.type, self.mtu, self.state, self.mac, self.ip, self.namespace, self.options)
+
+
+class IpAddressInterface(NetworkElement):
+    def __init__(self, name, index, mtu, state, mac=None, ip=None, namespace=None):
+        NetworkElement.__init__(self, name)
+        self.index = index
+        self.mtu = mtu
+        self.state = state
+        self.mac = mac
+        self.ip = ip
+        self.namespace = namespace
+
+    def setmac(self, mac):
+        self.mac = mac
+
+    def setip(self, ip):
+        self.ip = ip
+
+    def __str__(self):
+        return "IpAddressInterface(name: %s, index: %s, mtu: %s, state: %s, mac: %s, ip: %s, namespace: %s)" \
+               % (self.name, self.index, self.mtu, self.state, self.mac, self.ip, self.namespace)
+
 
 class OVSInterface(NetworkElement):
     def __init__(self, name, options={}):
         NetworkElement.__init__(self, name)
         self.options = options
 
-    def updateOption(self, key, value):
+    def updateoption(self, key, value):
         self.options[key] = value
 
     def __str__(self):
@@ -38,10 +67,10 @@ class OVSPort(NetworkElement):
         self.interfaces = interfaces
         self.options = options
 
-    def addInterface(self, interface):
+    def addinterface(self, interface):
         self.interfaces.append(interface)
 
-    def updateOption(self, key, value):
+    def updateoption(self, key, value):
         self.options[key] = value
 
     def __str__(self):
@@ -57,10 +86,10 @@ class OVSBridge(NetworkElement):
         self.ports = ports
         self.options = options
 
-    def addPort(self, port):
+    def addport(self, port):
         self.ports.append(port)
 
-    def updateOption(self, key, value):
+    def updateoption(self, key, value):
         self.options[key] = value
 
     def __str__(self):
@@ -71,7 +100,7 @@ class OVSBridge(NetworkElement):
 
 
 class LinuxBridge(NetworkElement):
-    def __init__(self, name, id, stp, nics, namespace):
+    def __init__(self, name, id, stp, nics, namespace=None):
         NetworkElement.__init__(self, name)
         self.id = id
         self.stp = stp
@@ -90,7 +119,7 @@ class Route():
 
 
 class Tunnel():
-    def __init__(self, tunId, fromIp, toIp, peerTunId, srcPort, destPort, namespace):
+    def __init__(self, tunId, fromIp, toIp, peerTunId, srcPort, destPort, namespace=None):
         self.tunId = tunId
         self.fromIp = fromIp
         self.toIp = toIp
@@ -101,10 +130,10 @@ class Tunnel():
 
 
 class Session():
-    def __init__(self, sessionId, peerSessionId, tunId, peerTunId, iface, namespace):
+    def __init__(self, sessionId, tunId, peerSessionId, peerTunId, iface, namespace=None):
         self.sessionId = sessionId
-        self.peerSessionId = peerSessionId
         self.tunId = tunId
+        self.peerSessionId = peerSessionId
         self.peerTunId = peerTunId
         self.iface = iface
         self.namespace = namespace
