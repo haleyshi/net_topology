@@ -94,14 +94,6 @@ def execInAllNamespaces(cmd):
     return result
 
 
-def getAllIfaces():
-    '''
-    Get all interfaces
-    :return: list, list of interfaces
-    '''
-    #TODO
-
-
 def getLinuxBridges():
     '''
     Get Linux bridges on current host without namespace
@@ -502,6 +494,9 @@ def getVethPeerIndex(ifaceName, namespace=None):
 
 
 def getOVSOptions(ifaceName, ovsBridges):
+    if ovsBridges is None:
+        return None
+
     for bridge in ovsBridges:
         for port in bridge.ports:
             if ifaceName == port.name:
@@ -613,6 +608,9 @@ def getSession(ifaceName, sessions):
     :return: Session
     '''
 
+    if sessions is None:
+        return None
+
     for session in sessions:
         if session.iface == ifaceName:
             return session
@@ -627,6 +625,9 @@ def getTunnel(tunId, tunnels):
     :param tunnels: list, list of Tunnel
     :return: Tunnel
     '''
+
+    if tunnels is None:
+        return None
 
     for tunnel in tunnels:
         if tunnel.tunId == tunId:
@@ -675,66 +676,67 @@ def getAllInterfaces(allNs):
 
     ifaces = []
 
-    for ipAddrIface in ipAddrIfaces:
-        name = ipAddrIface.name
-        iface = Interface(name, ipAddrIface.index, None, ipAddrIface.mtu, ipAddrIface.state,
-                          ipAddrIface.mac, ipAddrIface.ip, ipAddrIface.namespace, options={})
+    if ipAddrIfaces is not None:
+        for ipAddrIface in ipAddrIfaces:
+            name = ipAddrIface.name
+            iface = Interface(name, ipAddrIface.index, None, ipAddrIface.mtu, ipAddrIface.state,
+                              ipAddrIface.mac, ipAddrIface.ip, ipAddrIface.namespace, options={})
 
-        ifaces.append(iface)
+            ifaces.append(iface)
 
-        if isOvsSystem(name):
-            iface.settype('ovs-system')
+            if isOvsSystem(name):
+                iface.settype('ovs-system')
 
-        peer = getVethPeerIndex(name, ipAddrIface.namespace)
-        if peer is not None:
-            if peer.isdigit():
-                iface.settype('veth-pair')
-                iface.updateoption('peerIf', peer)
+            peer = getVethPeerIndex(name, ipAddrIface.namespace)
+            if peer is not None:
+                if peer.isdigit():
+                    iface.settype('veth-pair')
+                    iface.updateoption('peerIf', peer)
 
-        if isLinuxBrIface(name):
-            iface.settype('LinuxBridgeInterface')
+            if isLinuxBrIface(name):
+                iface.settype('LinuxBridgeInterface')
 
-        options = getOVSOptions(name, ovsBridges)
-        if options is not None:
-            if options.has_key('type'):
-                if options['type'] == 'internal':
-                    iface.settype('OVSInternal')
-                elif options['type'] == 'gre':
-                    iface.settype('gre')
-                elif options['type'] == 'vxlan':
-                    iface.settype('vxlan')
+            options = getOVSOptions(name, ovsBridges)
+            if options is not None:
+                if options.has_key('type'):
+                    if options['type'] == 'internal':
+                        iface.settype('OVSInternal')
+                    elif options['type'] == 'gre':
+                        iface.settype('gre')
+                    elif options['type'] == 'vxlan':
+                        iface.settype('vxlan')
 
-            for key in options.keys():
-                #print name, key, options[key]
-                iface.updateoption(key, options[key])
+                for key in options.keys():
+                    #print name, key, options[key]
+                    iface.updateoption(key, options[key])
 
-        if isPhysIface(name):
-            iface.settype('physical')
+            if isPhysIface(name):
+                iface.settype('physical')
 
-        if isLoopBack(name):
-            iface.settype('loopback')
+            if isLoopBack(name):
+                iface.settype('loopback')
 
-        if isTunTap(name):
-            iface.settype('tuntap')
+            if isTunTap(name):
+                iface.settype('tuntap')
 
-        session = getSession(name, sessions)
-        if session is not None:
-            iface.settype('l2tp')
-            tunnel = getTunnel(session.tunId, tunnels)
+            session = getSession(name, sessions)
+            if session is not None:
+                iface.settype('l2tp')
+                tunnel = getTunnel(session.tunId, tunnels)
 
-            if tunnel is not None:
-                ifaceUsed = findOutIface(tunnel.fromIp)
+                if tunnel is not None:
+                    ifaceUsed = findOutIface(tunnel.fromIp)
 
-                if ifaceUsed is not None:
-                    iface.updateoption('ifaceUsed', ifaceUsed)
+                    if ifaceUsed is not None:
+                        iface.updateoption('ifaceUsed', ifaceUsed)
 
-        if isVlanAlias(name):
-            regex_result = re.search(r'(\S+)\.(\d+)@(\S+)', name)
-            if regex_result:
-                if regex_result.group(1) == regex_result.group(3):
-                    iface.settype('vlan_alias')
-                    iface.updateoption('vlantag', regex_result.group(2))
-                    iface.updateoption('ifaceUsed', regex_result.group(1))
+            if isVlanAlias(name):
+                regex_result = re.search(r'(\S+)\.(\d+)@(\S+)', name)
+                if regex_result:
+                    if regex_result.group(1) == regex_result.group(3):
+                        iface.settype('vlan_alias')
+                        iface.updateoption('vlantag', regex_result.group(2))
+                        iface.updateoption('ifaceUsed', regex_result.group(1))
 
     return ifaces
 
