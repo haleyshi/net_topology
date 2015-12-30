@@ -476,6 +476,8 @@ def getIpAddrIfacesInAllNS():
                                                regex_result.group(3), regex_result.group(4), namespace=namespace)
                     ifaces.append(iface)
 
+    return ifaces
+
 
 def getVethPeerIndex(ifaceName, namespace=None):
     '''
@@ -685,10 +687,9 @@ def getAllInterfaces(allNs):
 
         peer = getVethPeerIndex(name, ipAddrIface.namespace)
         if peer is not None:
-            if peer != "no stats available":
-                if peer != '':
-                    iface.settype('veth-pair')
-                    iface.updateoption('peerIf', peer)
+            if peer.isdigit():
+                iface.settype('veth-pair')
+                iface.updateoption('peerIf', peer)
 
         if isLinuxBrIface(name):
             iface.settype('LinuxBridgeInterface')
