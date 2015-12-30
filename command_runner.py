@@ -636,14 +636,14 @@ def getTunnel(tunId, tunnels):
 def findOutIface(ip):
     '''
     Find the interface used to send out the packet according to the given IP
-    :param ip: string, ip
+    :param ip: string, 'ip/netmask' format or 'ip' format
     :return: string, interface name
     '''
 
     routes = getRoutes()
     if routes is not None:
         for route in routes:
-            if route.src == ip:
+            if ip.startswith(route.src):
                 return route.device
 
     return None
@@ -686,8 +686,9 @@ def getAllInterfaces(allNs):
         peer = getVethPeerIndex(name, ipAddrIface.namespace)
         if peer is not None:
             if peer != "no stats available":
-                iface.settype('veth-pair')
-                iface.updateoption('peerIf', peer)
+                if peer != '':
+                    iface.settype('veth-pair')
+                    iface.updateoption('peerIf', peer)
 
         if isLinuxBrIface(name):
             iface.settype('LinuxBridgeInterface')
