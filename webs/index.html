@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Network Topology</title>
+    <link rel="stylesheet" href="/gui/static/bootstrap.min.css">
+    <script src="/gui/static/jquery.min.js"></script>
+    <script src="/gui/static/bootstrap.min.js"></script>
+</head>
+<body>
+    <form role="form" action="/gui/topo/" method="get">
+    <div class="form-group col-sm-6 col-md-3">
+        <label for="src">Choose the data source for demo purpose...</label>
+        <select id="src" name="src" class="form-control">
+            <option value="node" selected>REALTIME: CURRENT NODE</option>
+            <option value="yo_cic">SNAPSHOT: YO CLOUD LAB CIC NODE</option>
+            <option value="yo_compute">SNAPSHOT: YO CLOUD LAB COMPUTE NODE</option>
+            <option value="dc191_cic">SNAPSHOT: DC191 CIC NODE</option>
+            <option value="dc191_compute">SNAPSHOT: DC191 COMPUTE NODE</option>
+            <option value="itte_node62">SNAPSHOT: ITTE CLOUD NODE-62</option>
+            <option value="itte_node71">SNAPSHOT: ITTE CLOUD NODE-71</option>
+        </select>
+
+        <br>
+
+        <input class="form-control" type="submit" value="GO!">
+    </div>
+</form>
+</body>
+</html>

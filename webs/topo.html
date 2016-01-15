@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Network Topology</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <script type="text/javascript" src="/gui/static/raphael-min.js"></script>
+  <script type="text/javascript" src="/gui/static/jquery.min.js"></script>
+  <link rel="stylesheet" href="/gui/static/bootstrap.min.css">
+  <script type="text/javascript" src="/gui/static/bootstrap.min.js"></script>
+  <script type="text/javascript">
+    function getPath(e1, e2) {
+        var bb1 = e1.getBBox(),
+            bb2 = e2.getBBox(),
+            p = [{x: bb1.x + bb1.width / 2, y: bb1.y - 1},
+            {x: bb1.x + bb1.width / 2, y: bb1.y + bb1.height + 1},
+            {x: bb1.x - 1, y: bb1.y + bb1.height / 2},
+            {x: bb1.x + bb1.width + 1, y: bb1.y + bb1.height / 2},
+            {x: bb2.x + bb2.width / 2, y: bb2.y - 1},
+            {x: bb2.x + bb2.width / 2, y: bb2.y + bb2.height + 1},
+            {x: bb2.x - 1, y: bb2.y + bb2.height / 2},
+            {x: bb2.x + bb2.width + 1, y: bb2.y + bb2.height / 2}],
+            d = {}, dis = [];
+        for (var i = 0; i < 4; i++) {
+            for (var j = 4; j < 8; j++) {
+                var dx = Math.abs(p[i].x - p[j].x),
+                    dy = Math.abs(p[i].y - p[j].y);
+                if ((i == j - 4) || (((i != 3 && j != 6) || p[i].x < p[j].x) && ((i != 2 && j != 7) || p[i].x > p[j].x) && ((i != 0 && j != 5) || p[i].y > p[j].y) && ((i != 1 && j != 4) || p[i].y < p[j].y))) {
+                    dis.push(dx + dy);
+                    d[dis[dis.length - 1]] = [i, j];
+                }
+            }
+        }
+        if (dis.length == 0) {
+            var res = [0, 4];
+        } else {
+            res = d[Math.min.apply(Math, dis)];
+        }
+        var x1 = p[res[0]].x,
+            y1 = p[res[0]].y,
+            x4 = p[res[1]].x,
+            y4 = p[res[1]].y;
+        dx = Math.max(Math.abs(x1 - x4) / 2, 10);
+        dy = Math.max(Math.abs(y1 - y4) / 2, 10);
+        var x2 = [x1, x1, x1 - dx, x1 + dx][res[0]].toFixed(3),
+            y2 = [y1 - dy, y1 + dy, y1, y1][res[0]].toFixed(3),
+            x3 = [0, 0, 0, 0, x4, x4, x4 - dx, x4 + dx][res[1]].toFixed(3),
+            y3 = [0, 0, 0, 0, y1 + dy, y1 - dy, y4, y4][res[1]].toFixed(3);
+        var path = ["M", x1.toFixed(3), y1.toFixed(3), "C", x2, y2, x3, y3, x4.toFixed(3), y4.toFixed(3)].join(",");
+        return path;
+    }
+    Raphael.fn.reconnect = function(c, e1, e2) {
+        c.attr({path: getPath(e1, e2)});
+        return c;
+    }
+    Raphael.fn.disconnect = function(c) {
+        e1 = c.data("e1");
+        e2 = c.data("e2");
+        e1.data("path").splice(e1.data("path").indexOf(c), 1);
+        e2.data("path").splice(e2.data("path").indexOf(c), 1);
+        c.remove();
+        return null;
+    }
+
+    var rectChosen = null;
+    Raphael.fn.clickable = function(e, defaultAttr, selectedAttr) {
+        e.data('defaultAttr', defaultAttr);
+        e.click(function() {
+          if (rectChosen == null) {
+            this.attr(selectedAttr);
+            rectChosen = this;
+          } else if (rectChosen != this) {
+            rectChosen.attr(rectChosen.data('defaultAttr'));
+            this.attr(selectedAttr);
+            rectChosen = this;
+          } else {
+            this.attr(defaultAttr);
+            rectChosen = null;
+          }
+        });
+        return e;
+    }
+    Raphael.fn.rectWithText = function(x, y, w, h, text) {
+        var paper = this;
+        var rect = paper.rect(x, y, w, h);
+        var txt = paper.text(x + w / 2, y + h / 2, text);
+        rect.data('textObj', txt);
+        return rect;
+    }
+    Raphael.fn.dragable = function(e1) {
+        paper = this;
+        e1.data("path", []);
+        e1.drag(
+            function(dx, dy, nx, ny) {
+                context = paper.ca.context;
+                if (nx > context['guiWidth'] || nx < 0 || ny > context['guiHeight'] || ny < 0) {
+                  return;
+                }
+                this.attr("x", this.ox+dx);
+                this.attr("y", this.oy+dy);
+                for (i=0;i<this.data("path").length;i++) {
+                    c = this.data("path")[i];
+                    e1 = c.data("e1");
+                    e2 = c.data("e2");
+                    paper.reconnect(c, e1, e2);
+                }
+                if (this.data('textObj')!=null) {
+                  var textObj = this.data('textObj');
+                  textObj.attr('x', this.attr('x') + this.attr('width')/2);
+                  textObj.attr('y', this.attr('y') + this.attr('height')/2);
+                }
+            },
+            function(sx, sy) {
+                this.ox = this.attr("x");
+                this.oy = this.attr("y");
+            },
+            function() {
+            }
+        );
+        return e1;
+    }
+    Raphael.fn.connect = function(e1, e2) {
+        c = this.path(getPath(e1, e2));
+        c.data("e1", e1);
+        c.data("e2", e2);
+                if (e1.data("path")==null) {
+                    e1.data("path", []);
+                }
+        e1.data("path").push(c);
+                if (e2.data("path")==null) {
+                    e2.data("path", []);
+                }
+        e2.data("path").push(c);
+        return c;
+    }
+
+  function loadDataAndDrawTopo() {
+      var api_url = "/v1/json/?"+Math.random();
+      var srcParm = "";
+
+      {% if src %}
+          srcParm = "{{ src }}";
+      {% endif %}
+
+      if (srcParm != "node" && srcParm != "")
+      {
+          api_url = "/gui/static/"+srcParm+".json";
+      }
+
+      $.getJSON(api_url)
+          .done(function(json) {
+              //console.log("JSON Data: " + json);
+              drawTopo(json);
+          })
+          .fail(function(jqxhr, textStatus, error) {
+              //console.log("Request Failed: " + textStatus + ", " + error);
+              var html = '<div class="alert alert-danger alert-dismissable">'
+                  + '<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>'
+                  + 'load data failed: ' + textStatus + ', ' + error + '</div>';
+              $("#holder").html(html);
+          });
+  }
+
+  function drawOthers(paper, ifaces) {
+    if (!ifaces) {
+      return;
+    }
+
+    var context = paper.ca.context;
+    var name2IfacesRect = context['name2IfacesRect'];
+    var idx2IfacesRect = context['idx2IfacesRect'];
+    context['x'] = context['init-x'];
+    for (var k=0;k<ifaces.length;k++) {
+      var iface = ifaces[k];
+
+      // draw interface
+      x = context['x'];
+      y = context['y'];
+      w = context['interface-width'];
+      h = context['interface-height'];
+      attr = context['interface-attr'];
+      attrSelected = context['interface-attr-selected'];
+
+      var ifaceRect = paper.rectWithText(x, y, w, h, iface.name).attr(attr);
+      paper.dragable(ifaceRect);
+      paper.clickable(ifaceRect, attr, attrSelected);
+
+      context['x'] += (w + context['interface-padding']);
+      name2IfacesRect[iface.name] = ifaceRect;
+      idx2IfacesRect[iface.index] = ifaceRect;
+
+      title = "";
+      $.each(iface, function(key, value)
+      {
+          if (key.slice(0, 2) != "__")
+          {
+              title += key + ": " + value + "\n";
+          }
+      });
+      ifaceRect.attr("title", title);
+
+      // Link veth interfaces
+      if (iface.__peerIf != null) {
+        vethIfaceRect = idx2IfacesRect[iface.__peerIf];
+        if (vethIfaceRect != null) {
+          paper.connect(ifaceRect, vethIfaceRect).attr(context['veth-interface-link-attr']);
+        }
+      }
+      // Link patch interfaces
+      if (iface.peer != null) {
+        vethIfaceRect = name2IfacesRect[iface.peer];
+        if (vethIfaceRect != null) {
+          paper.connect(ifaceRect, vethIfaceRect).attr(context['patch-interface-link-attr']);
+        }
+      }
+      // draw interface ends
+    }
+    context['y'] += (h + context['bridge-padding']);
+  }
+
+  function drawLinuxBridge(paper, brs) {
+    if (!brs) {
+      return;
+    }
+
+    var context = paper.ca.context;
+    var name2IfacesRect = context['name2IfacesRect'];
+    var idx2IfacesRect = context['idx2IfacesRect'];
+    for (var i=0;i<brs.length;i++) {
+      var br = brs[i];
+      // draw bridge
+      context['x'] = context['init-x'];
+      var x = context['x'];
+      var y = context['y'];
+      var w = context['bridge-width'];
+      var h = context['bridge-height'];
+      var attr = context['bridge-attr'];
+      var attrSelected = context['bridge-attr-selected'];
+
+      var brRect = paper.rectWithText(x, y, w, h, br.name).attr(attr);
+      paper.dragable(brRect);
+      paper.clickable(brRect, attr, attrSelected);
+      context['y'] += (h + context['bridge-interface-padding']);
+
+      var title = ""
+      $.each(br, function(key, value)
+      {
+          if (key.slice(0, 2) != "__")
+          {
+              title += key + ": " + value + "\n";
+          }
+      });
+      brRect.attr("title", title);
+      // draw bridge ends
+
+
+      var ifaces = br.__interfaces;
+      if (ifaces != null) {
+        for (var k=0;k<ifaces.length;k++) {
+          var iface = ifaces[k];
+
+          // draw interface
+          x = context['x'];
+          y = context['y'];
+          w = context['interface-width'];
+          h = context['interface-height'];
+          attr = context['interface-attr'];
+          attrSelected = context['interface-attr-selected'];
+
+          var ifaceRect = paper.rectWithText(x, y, w, h, iface.name).attr(attr);
+          paper.dragable(ifaceRect);
+          paper.clickable(ifaceRect, attr, attrSelected);
+
+          context['x'] += (w + context['interface-padding']);
+          name2IfacesRect[iface.name] = ifaceRect;
+          idx2IfacesRect[iface.index] = ifaceRect;
+
+          title = "";
+          $.each(iface, function(key, value)
+          {
+              if (key.slice(0, 2) != "__")
+              {
+                  title += key + ": " + value + "\n";
+              }
+          });
+          ifaceRect.attr("title", title);
+
+          // Link br - interface
+          paper.connect(ifaceRect, brRect).attr(context['br-interface-link-attr']);
+          // Link veth interfaces
+          if (iface.__peerIf != null) {
+            vethIfaceRect = idx2IfacesRect[iface.__peerIf];
+            if (vethIfaceRect != null) {
+              paper.connect(ifaceRect, vethIfaceRect).attr(context['veth-interface-link-attr']);
+            }
+          }
+          // Link patch interfaces
+          if (iface.peer != null) {
+            vethIfaceRect = name2IfacesRect[iface.peer];
+            if (vethIfaceRect != null) {
+              paper.connect(ifaceRect, vethIfaceRect).attr(context['patch-interface-link-attr']);
+            }
+          }
+          // draw interface ends
+        }
+      }
+      context['y'] += (h + context['bridge-padding']);
+    }
+  }
+
+  function drawOvsBridge(paper, brs) {
+    if (!brs) {
+      return;
+    }
+
+    var context = paper.ca.context;
+    var name2IfacesRect = context['name2IfacesRect'];
+    var idx2IfacesRect = context['idx2IfacesRect'];
+    for (var i=0;i<brs.length;i++) {
+      var br = brs[i];
+      // draw bridge
+      context['x'] = context['init-x'];
+      var x = context['x'];
+      var y = context['y'];
+      var w = context['bridge-width'];
+      var h = context['bridge-height'];
+      var attr = context['bridge-attr'];
+      var attrSelected = context['bridge-attr-selected'];
+
+      var brRect = paper.rectWithText(x, y, w, h, br.name).attr(attr);
+      paper.dragable(brRect);
+      paper.clickable(brRect, attr, attrSelected);
+      context['y'] += (h + context['bridge-interface-padding']);
+
+      var title = ""
+      $.each(br, function(key, value)
+      {
+          if (key.slice(0, 2) != "__")
+          {
+              title += key + ": " + value + "\n";
+          }
+      });
+      brRect.attr("title", title);
+      // draw bridge ends
+
+      var ports = br.__ports;
+      for (var j=0;j<ports.length;j++) {
+        var port = ports[j];
+        var ifaces = port.__interfaces;
+        for (var k=0;k<ifaces.length;k++) {
+          var iface = ifaces[k];
+
+          // draw interface
+          x = context['x'];
+          y = context['y'];
+          w = context['interface-width'];
+          h = context['interface-height'];
+          attr = context['interface-attr'];
+          attrSelected = context['interface-attr-selected'];
+
+          var ifaceRect = paper.rectWithText(x, y, w, h, iface.name).attr(attr);
+          paper.dragable(ifaceRect);
+          paper.clickable(ifaceRect, attr, attrSelected);
+
+          context['x'] += (w + context['interface-padding']);
+          name2IfacesRect[iface.name] = ifaceRect;
+          idx2IfacesRect[iface.index] = ifaceRect;
+
+          title = "";
+          $.each(iface, function(key, value)
+          {
+              if (key.slice(0, 2) != "__")
+              {
+                  title += key + ": " + value + "\n";
+              }
+          });
+          ifaceRect.attr("title", title);
+
+          // Link br - interface
+          paper.connect(ifaceRect, brRect).attr(context['br-interface-link-attr']);
+          // Link veth interfaces
+          if (iface.__peerIf != null) {
+            vethIfaceRect = idx2IfacesRect[iface.__peerIf];
+            if (vethIfaceRect != null) {
+              paper.connect(ifaceRect, vethIfaceRect).attr(context['veth-interface-link-attr']);
+            }
+          }
+          // Link patch interfaces
+          if (iface.peer != null) {
+            vethIfaceRect = name2IfacesRect[iface.peer];
+            if (vethIfaceRect != null) {
+              paper.connect(ifaceRect, vethIfaceRect).attr(context['patch-interface-link-attr']);
+            }
+          }
+          // draw interface ends
+        }
+      }
+      context['y'] += (h + context['bridge-padding']);
+    }
+  }
+
+  function initContext(data) {
+    var context = [];
+
+    // Existing Interfaces/Bridges
+    context['name2IfacesRect'] = [];
+    context['idx2IfacesRect'] = [];
+
+    // Bridge
+    context['bridge-width'] = 90;
+    context['bridge-height'] = 40;
+    context['bridge-attr'] = {"r": 20, "stroke":"#6C3365", "fill":"#ADADAD", "stroke-dasharray":"-"};
+    context['bridge-attr-selected'] = {"stroke":"#336666", "fill":"#6FB7B7"};
+    context['bridge-interface-padding'] = 30;
+    context['bridge-padding'] = 50;
+
+    // Links
+    context['br-interface-link-attr'] = {"stroke":"#ADADAD", "stroke-width": 2, "stroke-dasharray": ".", "arrow-start":"oval-midium-midium", "arrow-end":"oval-wide-long"};
+    context['veth-interface-link-attr'] = {"stroke":"#A8FF24", "stroke-width": 2, "arrow-start":"diamond-wide-long", "arrow-end":"diamond-wide-long"}
+    context['patch-interface-link-attr'] = {"stroke":"#A8FF24", "stroke-width": 2, "arrow-start":"diamond-wide-long", "arrow-end":"diamond-wide-long"}
+
+    // Port
+    // FIXME: Do we need to draw ports?
+    //context['port-padding'] = 30;
+    //context['port-width'] = 90;
+    //context['port-height'] = 40;
+    //context['port-attr'] = {"r": 5, "stroke":"#6C3365", "fill":"#ADADAD", "stroke-dasharray":"-"};
+
+    // Interface
+    context['interface-padding'] = 30;
+    context['interface-width'] = 90;
+    context['interface-height'] = 40;
+    context['interface-attr'] = {"r": 5, "stroke":"#0072E3", "fill":"#D2E9FF"};
+    context['interface-attr-selected'] = {"stroke":"#336666", "fill":"#6FB7B7"};
+    context['interface-attr-error'] = {"stroke":"#FFFF6F", "fill":"#FF5151"};
+
+    // Paper
+    var paperRows = 1;
+    var paperColumns = 1;
+
+    if (data['others']) {
+      paperColumns = data['others'].length;
+    }
+
+    if (data['linux-bridges']) {
+      paperRows += data['linux-bridges'].length;
+      for (var i=0;i<data['linux-bridges'].length;i++) {
+        var ifaces = data['linux-bridges'][i].__interfaces;
+        if (ifaces == null) {
+          continue;
+        }
+
+        paperColumns = Math.max(paperColumns, ifaces.length);
+      }
+    }
+
+    if (data['ovs-bridges']) {
+      paperRows += data['ovs-bridges'].length;
+      for (var i=0;i<data['ovs-bridges'].length;i++) {
+        var numIface = 0;
+        for (var j=0;j<data['ovs-bridges'][i]['__ports'].length;j++) {
+          var ifaces = data['ovs-bridges'][i]['__ports'][j].__interfaces;
+          numIface += ifaces.length;
+        }
+        paperColumns = Math.max(paperColumns, numIface);
+      }
+    }
+
+    context['init-x'] = 200;
+    context['init-y'] = 10;
+    context['x'] = context['init-x'];
+    context['y'] = context['init-y'];
+    context['guiWidth'] = context['init-x'] + paperColumns * (context['interface-width'] + context['interface-padding']);
+    context['guiHeight'] = context['init-y'] + paperRows * (context['bridge-height'] + context['bridge-interface-padding'] + context['interface-height'] + context['bridge-padding']);
+
+    return context;
+  }
+
+  function drawTopo(data) {
+      if (data == null)
+      {
+          var html = '<div class="alert alert-danger alert-dismissable">'
+                + '<button type="button" class="close" data-dismiss="alert" aria-hidden="true">&times;</button>'
+                + 'failed to load data!</div>';
+          $("#holder").html(html);
+          return;
+      }
+
+      var context = initContext(data);
+      var paper = Raphael("holder", context['guiWidth'], context['guiHeight']);
+      paper.ca.context = context;
+
+      drawOvsBridge(paper, data['ovs-bridges']);
+      drawLinuxBridge(paper, data['linux-bridges']);
+      drawOthers(paper, data['others']);
+  }
+
+  $(function(){
+      loadDataAndDrawTopo();
+  });
+  </script>
+</head>
+<body>
+<div id="holder"></div>
+</body>
+</html>
